@@ -1,0 +1,41 @@
+{
+  "version": "7",
+  "dialect": "sqlite",
+  "entries": [
+    {
+      "idx": 0,
+      "version": "6",
+      "when": 1795138687940,
+      "tag": "0000_sparkling_storm",
+      "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "6",
+      "when": 1795139162993,
+      "tag": "0001_windy_mister_sinister",
+      "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "6",
+      "when": 1795139375696,
+      "tag": "0002_flashy_iron_man",
+      "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "6",
+      "when": 1795141006839,
+      "tag": "0003_overrated_steve_rogers",
+      "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "6",
+      "when": 1795200291790,
+      "tag": "0004_colorful_shriek",
+      "breakpoints": true
+    }
+  ]
+}

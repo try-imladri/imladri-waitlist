@@ -1,0 +1,9 @@
+User-agent: *
+Allow: /
+Disallow: /admin
+Disallow: /api/
+Disallow: /thanks
+Disallow: /unsubscribe
+Disallow: /delete-data
+
+Sitemap: https://imladri.com/sitemap.xml

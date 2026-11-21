@@ -1,0 +1,62 @@
+{
+  "$schema": "./node_modules/wrangler/config-schema.json",
+  "name": "imladri-waitlist",
+  "account_id": "7cbd9a3268df4d227c0eb742ff9292c9",
+  "main": "worker/index.ts",
+  "compatibility_date": "2026-05-15",
+  "compatibility_flags": [
+    "nodejs_compat"
+  ],
+  "workers_dev": false,
+  "preview_urls": false,
+  "assets": {
+    "binding": "ASSETS",
+    "not_found_handling": "none",
+    "run_worker_first": false
+  },
+  "routes": [
+    {
+      "pattern": "imladri.com",
+      "custom_domain": true
+    },
+    {
+      "pattern": "www.imladri.com",
+      "custom_domain": true
+    }
+  ],
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "imladri-waitlist",
+      "database_id": "c4dc7942-b704-4843-9fb3-414bd02273bd",
+      "migrations_dir": "drizzle",
+      "migrations_table": "d1_migrations"
+    }
+  ],
+  "triggers": {
+    "crons": [
+      "* * * * *"
+    ]
+  },
+  "vars": {
+    "EMAIL_FROM": "Osama from Imladri <osama@imladri.com>",
+    "EMAIL_REPLY_TO": "osama@imladri.com",
+    "ADMIN_EMAILS": "osama@imladri.com",
+    "ADMIN_AUTH_MODE": "access",
+    "ADMIN_ACCESS_ISSUER": "https://imladri.cloudflareaccess.com",
+    "ADMIN_ACCESS_AUD": "56122823d7a0e83701075b075eb067c66f3c66cafaf6a922e765f26abeaa41a5",
+    "ADMIN_ACCESS_EMAILS": "osama@imladri.com",
+    "PUBLIC_APP_URL": "https://imladri.com",
+    "SITE_BASE_URL": "https://imladri.com"
+  },
+  "observability": {
+    "enabled": true,
+    "logs": {
+      "enabled": true,
+      "invocation_logs": false
+    },
+    "traces": {
+      "enabled": false
+    }
+  }
+}

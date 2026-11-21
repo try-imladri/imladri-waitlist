@@ -1,0 +1,1 @@
+ALTER TABLE `waitlist_signups` ADD `created_day` text DEFAULT '' NOT NULL;

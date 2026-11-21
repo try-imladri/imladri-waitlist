@@ -1,0 +1,33 @@
+{
+  "project": "Imladri live Cloudflare waitlist",
+  "sourcePath": "E:\\codex\\imladri-waitlist",
+  "sourceCommit": "11514d98fbe7a3e5008b1ab828547646b504da01",
+  "snapshotAtUtc": "2026-11-21T03:59:32.470913+00:00",
+  "sourceWorkingTreeClean": true,
+  "gitHistoryIncluded": false,
+  "runtimeSecretsIncluded": false,
+  "customerRecordsIncluded": false,
+  "productionOrigin": "https://imladri.com",
+  "productionChangesPerformedBySnapshot": false,
+  "expectedDeployment": "Owner Cloudflare account / Worker and D1; do not use retired Sites config.",
+  "excludedTrackedFiles": [
+    {
+      "path": ".openai/hosting.json",
+      "reason": "Retired Sites hosting metadata; live build uses vite.cloudflare.config.ts and wrangler.cloudflare.json."
+    },
+    {
+      "path": "resend-readonly-verification.json",
+      "reason": "Operational credential-verification evidence, not application source or configuration."
+    }
+  ],
+  "copyAdaptations": [
+    "Added private-source handoff exclusions to .gitignore."
+  ],
+  "validation": "Source copy/hash verification and content audit. No application behavior changed; production acceptance evidence remains local and was not copied.",
+  "sourceLicenseFiles": [
+    "public/assets/fonts/barlowcondensed/OFL.txt",
+    "public/assets/fonts/plusjakartasans/OFL.txt",
+    "scripts/vite/sites-vite-plugin.LICENSE",
+    "vendor/shadcn-tailwind-4.13.0.LICENSE.md"
+  ]
+}

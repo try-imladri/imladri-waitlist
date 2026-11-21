@@ -1,0 +1,50 @@
+import { AGE_RANGES, ApiError, GENDERS, cleanText, type SignupRow, type WaitlistEnv } from "./config.js";
+import { keyedHash } from "./crypto.js";
+import { database, person } from "./data.js";
+import { emailStatus } from "./mail.js";
+import { getAdminSession } from "./auth.js";
+
+export async function authorizeAdmin(request:Request,env:WaitlistEnv,isDev=false) {
+  const user=await getAdminSession(request,env,isDev);
+  if(!user)throw new ApiError(401,"Sign in to view the admin dashboard.","authentication_required");
+  return user;
+}
+export async function overview(env:WaitlistEnv) {
+  const db=database(env);
+  const current=new Date().toISOString();
+  const totals=await db.prepare("SELECT COUNT(*) signups,SUM(CASE WHEN status='active' AND expires_at>? THEN 1 ELSE 0 END) active,SUM(CASE WHEN status='unsubscribed' THEN 1 ELSE 0 END) unsubscribed FROM waitlist_signups").bind(current).first<{signups:number;active:number;unsubscribed:number}>();
+  const visits=await db.prepare("SELECT COUNT(*) visitors,COALESCE(SUM(converted),0) converted FROM waitlist_visits").first<{visitors:number;converted:number}>();
+  const grouped=(await db.prepare("SELECT city_key,MIN(city) city,gender_key,age_key,source,COUNT(*) count FROM waitlist_signups WHERE status='active' AND expires_at>? GROUP BY city_key,gender_key,age_key,source").bind(current).all<{city_key:string;city:string;gender_key:string;age_key:string;source:string;count:number}>()).results;
+  const genderMap=new Map(await Promise.all(GENDERS.map(async v=>[await keyedHash(`gender:${v}`,env),v] as [string,string])));
+  const ageMap=new Map(await Promise.all(AGE_RANGES.map(async v=>[await keyedHash(`age:${v}`,env),v] as [string,string])));
+  const cities=new Map<string,{city:string;count:number;genderCounts:Record<string,number>;ageCounts:Record<string,number>;sourceCounts:Record<string,number>}>();
+  for(const row of grouped){const city=cities.get(row.city_key)||{city:row.city,count:0,genderCounts:{},ageCounts:{},sourceCounts:{}};if(row.city.localeCompare(city.city)<0)city.city=row.city;city.count+=row.count;const gender=genderMap.get(row.gender_key)||"Other";const age=ageMap.get(row.age_key)||"Other";city.genderCounts[gender]=(city.genderCounts[gender]||0)+row.count;city.ageCounts[age]=(city.ageCounts[age]||0)+row.count;city.sourceCounts[row.source]=(city.sourceCounts[row.source]||0)+row.count;cities.set(row.city_key,city);}
+  const sources=(await db.prepare("SELECT source,COUNT(*) count FROM waitlist_signups GROUP BY source ORDER BY count DESC").all<{source:string;count:number}>()).results;
+  const utmCampaigns=(await db.prepare("SELECT utm_source source,utm_campaign campaign,utm_content content,COUNT(*) count FROM waitlist_signups WHERE utm_source!='' OR utm_campaign!='' OR utm_content!='' GROUP BY utm_source,utm_campaign,utm_content ORDER BY count DESC").all()).results;
+  const referrals=(await db.prepare("SELECT parent.referral_code referralCode,parent.city,COUNT(child.id) count FROM waitlist_signups parent JOIN waitlist_signups child ON child.referred_by=parent.id WHERE child.status='active' AND child.expires_at>? AND parent.status='active' AND parent.expires_at>? GROUP BY parent.id ORDER BY count DESC LIMIT 25").bind(current,current).all()).results;
+  const days=(await db.prepare("SELECT day date,COUNT(*) visitors FROM waitlist_visits GROUP BY day ORDER BY day DESC LIMIT 30").all<{date:string;visitors:number}>()).results;
+  const signupDays=(await db.prepare("SELECT created_day date,COUNT(*) signups FROM waitlist_signups GROUP BY created_day ORDER BY created_day DESC LIMIT 30").all<{date:string;signups:number}>()).results;
+  const dailyMap=new Map(days.map(v=>[v.date,{date:v.date,visitors:v.visitors,signups:0}])); for(const day of signupDays){const item=dailyMap.get(day.date)||{date:day.date,visitors:0,signups:0};item.signups=day.signups;dailyMap.set(day.date,item);}
+  return {totals:{visitors:visits?.visitors||0,signups:totals?.signups||0,active:totals?.active||0,unsubscribed:totals?.unsubscribed||0},conversionRate:visits?.visitors?Math.min(100,visits.converted/visits.visitors*100):0,cities:[...cities.values()].sort((a,b)=>b.count-a.count||a.city.localeCompare(b.city)),sources,utmCampaigns,referrals,daily:[...dailyMap.values()].sort((a,b)=>a.date.localeCompare(b.date)),reportingTimezone:"America/Chicago",email:await emailTotals(env)};
+}
+export async function emailTotals(env:WaitlistEnv){const rows=(await database(env).prepare("SELECT status,COUNT(*) count FROM waitlist_email_outbox GROUP BY status").all<{status:string;count:number}>()).results;const totals={pending:0,sent:0,failed:0};for(const row of rows){if(row.status==="sent")totals.sent+=row.count;else if(row.status==="failed")totals.failed+=row.count;else if(["pending","sending"].includes(row.status))totals.pending+=row.count;}return totals;}
+export async function filters(params:URLSearchParams,env:WaitlistEnv){
+  const sql:string[]=[];const values:(string|number)[]=[];
+  const city=cleanText(params.get("city"));if(city){sql.push("city_key=?");values.push(city.toLocaleLowerCase());}
+  const gender=cleanText(params.get("gender"));if(gender){if(!GENDERS.includes(gender))throw new ApiError(400,"Invalid gender filter.");sql.push("gender_key=?");values.push(await keyedHash(`gender:${gender}`,env));}
+  const age=cleanText(params.get("age"));if(age){if(!AGE_RANGES.includes(age))throw new ApiError(400,"Invalid age filter.");sql.push("age_key=?");values.push(await keyedHash(`age:${age}`,env));}
+  const status=cleanText(params.get("status"));if(status){if(!["active","unsubscribed"].includes(status))throw new ApiError(400,"Invalid status filter.");sql.push("status=?");values.push(status);}
+  const source=cleanText(params.get("source"));if(source){sql.push("source=?");values.push(source);}
+  const q=cleanText(params.get("q"),254);if(q){if(q.includes("@")){sql.push("email_hash=?");values.push(await keyedHash(`email:${q.toLowerCase()}`,env));}else{sql.push("city LIKE ? ESCAPE '\\'");values.push(`%${q.replace(/[\\%_]/g,"\\$&")}%`);}}
+  return{where:sql.length?` WHERE ${sql.join(" AND ")}`:"",values};
+}
+export async function signupItem(row:SignupRow,env:WaitlistEnv){const p=await person(row,env);return{id:row.id,...p,city:row.city,source:row.source,utmSource:row.utm_source,utmMedium:row.utm_medium,utmCampaign:row.utm_campaign,utmContent:row.utm_content,utmTerm:row.utm_term,referrer:row.referrer_host,referralCode:row.referral_code,referredBy:row.referred_by,status:row.status,emailStatus:await emailStatus(row.id,env),createdAt:row.created_at,consentAt:row.consent_at,consentVersion:row.consent_version};}
+function pageNumber(value:string|null,fallback:number,max:number){const number=Number(value);return Number.isFinite(number)&&number!==0?Math.max(1,Math.min(max,Math.floor(number))):fallback;}
+export async function listSignups(params:URLSearchParams,env:WaitlistEnv){const{where,values}=await filters(params,env);const page=pageNumber(params.get("page"),1,100000);const pageSize=pageNumber(params.get("pageSize"),25,100);const db=database(env);const total=await db.prepare(`SELECT COUNT(*) count FROM waitlist_signups${where}`).bind(...values).first<{count:number}>();const rows=(await db.prepare(`SELECT * FROM waitlist_signups${where} ORDER BY created_at DESC,id DESC LIMIT ? OFFSET ?`).bind(...values,pageSize,(page-1)*pageSize).all<SignupRow>()).results;return{items:await Promise.all(rows.map(row=>signupItem(row,env))),total:total?.count||0,page,pageSize};}
+export function csvCell(value:unknown){let str=Array.isArray(value)?value.join("; "):String(value??"");if(/^[\s]*[=+\-@\t\r]/.test(str))str="'"+str;return '"'+str.replace(/"/g,'""')+'"';}
+export async function exportCsv(params:URLSearchParams,env:WaitlistEnv){
+  const{where,values}=await filters(params,env);let offset=0;let initial=true;let finished=false;const encoder=new TextEncoder();
+  const headers=["First name","Email","City","Age range","18+ confirmed","Gender","Gender description","Interested in","Looking for","Source","UTM source","UTM medium","UTM campaign","UTM content","UTM term","Referrer host","Referral code","Referred by","Status","Email status","Consent at","Consent version","Created at"];
+  return new ReadableStream<Uint8Array>({async pull(controller){try{if(initial){initial=false;controller.enqueue(encoder.encode("\uFEFF"+headers.map(csvCell).join(",")+"\r\n"));return;}if(finished){controller.close();return;}const rows=(await database(env).prepare(`SELECT * FROM waitlist_signups${where} ORDER BY created_at DESC,id DESC LIMIT 100 OFFSET ?`).bind(...values,offset).all<SignupRow>()).results;offset+=rows.length;if(rows.length<100)finished=true;for(const row of rows){const p=await person(row,env);const line=[p.firstName,p.email,row.city,p.ageRange,p.adultConfirmed,p.gender,p.genderDescription,p.interestedIn,p.lookingFor,row.source,row.utm_source,row.utm_medium,row.utm_campaign,row.utm_content,row.utm_term,row.referrer_host,row.referral_code,row.referred_by,row.status,await emailStatus(row.id,env),row.consent_at,row.consent_version,row.created_at];controller.enqueue(encoder.encode(line.map(csvCell).join(",")+"\r\n"));}if(!rows.length)controller.close();}catch(error){controller.error(error);}}});
+}
+export async function listEmails(env:WaitlistEnv){const rows=(await database(env).prepare("SELECT o.id,o.signup_id,o.kind,o.status,o.attempts,o.error,o.created_at,o.sent_at,s.encrypted_data FROM waitlist_email_outbox o JOIN waitlist_signups s ON s.id=o.signup_id ORDER BY o.created_at DESC LIMIT 100").all<{id:string;signup_id:string;kind:string;status:string;attempts:number;error:string|null;created_at:string;sent_at:string|null;encrypted_data:string}>()).results;return{items:await Promise.all(rows.map(async row=>{const p=await person({encrypted_data:row.encrypted_data}as SignupRow,env);return{id:row.id,signupId:row.signup_id,firstName:p.firstName,email:p.email,kind:row.kind,status:row.status,attempts:row.attempts,error:row.error,createdAt:row.created_at,sentAt:row.sent_at};})),totals:await emailTotals(env)};}
