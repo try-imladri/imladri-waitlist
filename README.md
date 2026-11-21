@@ -1,6 +1,6 @@
 # Imladri waitlist
 
-> iOS coding agents: start with the [linked implementation blueprint](https://github.com/try-imladri/imladri-ios-blueprint/blob/main/AGENT_START_HERE.md) and [reuse map](https://github.com/try-imladri/imladri-ios-blueprint/blob/main/REUSE_MAP.md). This private snapshot preserves the current Cloudflare source. See [provenance](PROVENANCE.json) and [handoff notes](HANDOFF-NOTES.md); runtime credentials and customer data are excluded.
+> iOS coding agents: start with the [linked implementation blueprint](https://github.com/try-imladri/imladri-ios-blueprint/blob/main/AGENT_START_HERE.md) and [reuse map](https://github.com/try-imladri/imladri-ios-blueprint/blob/main/REUSE_MAP.md). This reviewed snapshot preserves the current Cloudflare source. Public read access was authorized on November 21, 2026; reading or cloning needs no GitHub token. See [provenance](PROVENANCE.json) and [handoff notes](HANDOFF-NOTES.md); runtime credentials and customer data are excluded.
 
 Original Imladri logo, walking silhouettes, local fonts, and monochrome themes. Vinext + Cloudflare Worker/D1 + Resend.
 
